@@ -14,8 +14,7 @@ pub struct Uci {
 }
 
 impl Uci {
-    pub fn new() -> Self {
-        let weights = NnueWeights::zero(256);
+    pub fn new(weights: NnueWeights) -> Self {
         Self {
             name: "TinyCCRL",
             author: "Hansel",

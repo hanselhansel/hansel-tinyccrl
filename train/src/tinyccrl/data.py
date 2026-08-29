@@ -11,6 +11,10 @@ from torch.utils.data import Dataset
 from tinyccrl.features import fen_to_indices
 
 
+def score_to_wdl(score: float) -> float:
+    return 1.0 / (1.0 + 10.0 ** (-score / 400.0))
+
+
 def sample_fens(pgn_path: Path, max_games: int = 1000, positions_per_game: int = 4) -> Iterator[str]:
     with open(pgn_path) as f:
         for _ in range(max_games):
@@ -56,5 +60,5 @@ class FenDataset(Dataset):
         white = indices_to_dense(white_idx)
         black = indices_to_dense(black_idx)
         stm_t = torch.tensor(stm, dtype=torch.long)
-        targets = torch.tensor(scores, dtype=torch.float32) / 1000.0
+        targets = torch.tensor([score_to_wdl(s) for s in scores], dtype=torch.float32)
         return white, black, stm_t, targets

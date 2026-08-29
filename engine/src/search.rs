@@ -48,7 +48,7 @@ impl<'a> Searcher<'a> {
     }
 
     fn should_stop(&self) -> bool {
-        self.max_nodes.map_or(false, |max| self.nodes >= max)
+        self.max_nodes.is_some_and(|max| self.nodes >= max)
     }
 
     fn tt_index(&self, key: u64) -> usize {

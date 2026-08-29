@@ -53,7 +53,7 @@ class FenDataset(Dataset):
     def __getitem__(self, idx: int):
         row = self.rows[idx]
         white_idx, black_idx, stm = fen_to_indices(row["fen"])
-        expected = float(row.get("expected", score_to_wdl(row["score"])))
+        expected = float(row.get("expected", score_to_wdl(row.get("score", 0))))
         return white_idx, black_idx, stm, expected
 
     def collate(self, batch: list[tuple]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:

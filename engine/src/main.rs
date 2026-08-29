@@ -1,3 +1,5 @@
+mod nnue;
+mod search;
 mod uci;
 use uci::Uci;
 

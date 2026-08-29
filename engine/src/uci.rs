@@ -3,18 +3,24 @@ use std::str::FromStr;
 
 use chess::{Board, ChessMove};
 
+use crate::nnue::{Nnue, NnueWeights};
+use crate::search::Searcher;
+
 pub struct Uci {
     name: &'static str,
     author: &'static str,
     board: Option<Board>,
+    nnue: Nnue,
 }
 
 impl Uci {
     pub fn new() -> Self {
+        let weights = NnueWeights::zero(256);
         Self {
             name: "TinyCCRL",
             author: "Hansel",
             board: None,
+            nnue: Nnue::new(weights),
         }
     }
 
@@ -73,10 +79,16 @@ impl Uci {
         self.board = Some(board);
     }
 
-    fn handle_go(&self, _parts: &[&str]) {
+    fn handle_go(&mut self, parts: &[&str]) {
+        let depth = parts
+            .windows(2)
+            .find(|w| w[0] == "depth")
+            .and_then(|w| w[1].parse::<u8>().ok())
+            .unwrap_or(4);
+
         if let Some(board) = self.board {
-            let legal: Vec<ChessMove> = chess::MoveGen::new_legal(&board).collect();
-            let mv = legal.into_iter().next().unwrap_or_else(|| {
+            let mut searcher = Searcher::new(&self.nnue);
+            let mv = searcher.best_move(&board, depth).unwrap_or_else(|| {
                 ChessMove::new(
                     chess::Square::make_square(chess::Rank::Second, chess::File::E),
                     chess::Square::make_square(chess::Rank::Fourth, chess::File::E),

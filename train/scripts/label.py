@@ -14,8 +14,9 @@ def label_chunk(stockfish: str, depth: int, rows: list[dict]) -> list[dict]:
         for row in rows:
             board = chess.Board(row["fen"])
             info = engine.analyse(board, chess.engine.Limit(depth=depth))
-            score = info["score"].white().score(mate_score=100_000)
-            out.append({"fen": row["fen"], "score": score})
+            wdl = info["score"].white().wdl(model="sf16")
+            expected = (wdl[0] + wdl[1] / 2.0) / 1000.0
+            out.append({"fen": row["fen"], "expected": expected})
         return out
     finally:
         engine.quit()

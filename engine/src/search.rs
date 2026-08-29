@@ -17,7 +17,8 @@ struct TtEntry {
     depth: u8,
     flag: TtFlag,
     score: i32,
-    _best_move: Option<ChessMove>,
+    #[allow(dead_code)]
+    best_move: Option<ChessMove>,
 }
 
 pub struct Searcher<'a> {
@@ -81,7 +82,7 @@ impl<'a> Searcher<'a> {
             depth,
             flag,
             score,
-            _best_move: best_move,
+            best_move,
         });
     }
 
@@ -115,13 +116,14 @@ impl<'a> Searcher<'a> {
         Some(best)
     }
 
+    #[allow(unused_variables)]
     fn negamax(
         &mut self,
         board: &Board,
         depth: u8,
         alpha: i32,
         beta: i32,
-        _allow_null: bool,
+        allow_null: bool,
     ) -> i32 {
         if self.should_stop() {
             return self.nnue.evaluate(board);

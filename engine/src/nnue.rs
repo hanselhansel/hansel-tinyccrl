@@ -93,41 +93,6 @@ impl NnueAccumulator {
             black: weights.feature_biases.iter().map(|&b| b as i32).collect(),
         }
     }
-
-    fn update_piece(
-        &mut self,
-        nnue: &Nnue,
-        piece: Piece,
-        square: chess::Square,
-        color: Color,
-        add: i32,
-    ) {
-        let white_index = Nnue::feature_index(piece, square, color, Color::White);
-        let black_index = Nnue::feature_index(piece, square, color, Color::Black);
-        for i in 0..nnue.weights.ft_hidden {
-            self.white[i] +=
-                add * nnue.weights.feature_weights[white_index * nnue.weights.ft_hidden + i] as i32;
-            self.black[i] +=
-                add * nnue.weights.feature_weights[black_index * nnue.weights.ft_hidden + i] as i32;
-        }
-    }
-
-    pub fn apply_move(&mut self, nnue: &Nnue, board: &Board, mv: ChessMove) -> Board {
-        let next = board.make_move_new(mv);
-        for square in chess::ALL_SQUARES {
-            let before = board.piece_on(square).zip(board.color_on(square));
-            let after = next.piece_on(square).zip(next.color_on(square));
-            if before != after {
-                if let Some((piece, color)) = before {
-                    self.update_piece(nnue, piece, square, color, -1);
-                }
-                if let Some((piece, color)) = after {
-                    self.update_piece(nnue, piece, square, color, 1);
-                }
-            }
-        }
-        next
-    }
 }
 
 impl Nnue {
@@ -135,11 +100,92 @@ impl Nnue {
         Self { weights }
     }
 
+    fn update_piece(
+        &self,
+        accumulator: &mut NnueAccumulator,
+        piece: Piece,
+        square: chess::Square,
+        color: Color,
+        add: i32,
+    ) {
+        let white_index = Self::feature_index(piece, square, color, Color::White);
+        let black_index = Self::feature_index(piece, square, color, Color::Black);
+        for i in 0..self.weights.ft_hidden {
+            accumulator.white[i] +=
+                add * self.weights.feature_weights[white_index * self.weights.ft_hidden + i] as i32;
+            accumulator.black[i] +=
+                add * self.weights.feature_weights[black_index * self.weights.ft_hidden + i] as i32;
+        }
+    }
+
+    pub fn apply_move(
+        &self,
+        accumulator: &mut NnueAccumulator,
+        board: &Board,
+        mv: ChessMove,
+    ) -> Board {
+        let source = mv.get_source();
+        let dest = mv.get_dest();
+        let moving_piece = board.piece_on(source).expect("move source is occupied");
+        let moving_color = board.color_on(source).expect("move source has a color");
+
+        self.update_piece(accumulator, moving_piece, source, moving_color, -1);
+
+        if let Some(captured_piece) = board.piece_on(dest) {
+            let captured_color = board.color_on(dest).expect("captured square has a color");
+            self.update_piece(accumulator, captured_piece, dest, captured_color, -1);
+        } else if moving_piece == Piece::Pawn && source.get_file() != dest.get_file() {
+            let victim_square = chess::Square::make_square(source.get_rank(), dest.get_file());
+            if board.en_passant() == Some(victim_square) {
+                let victim_color = board
+                    .color_on(victim_square)
+                    .expect("en-passant victim has a color");
+                let victim_piece = board
+                    .piece_on(victim_square)
+                    .expect("en-passant victim is a pawn");
+                self.update_piece(accumulator, victim_piece, victim_square, victim_color, -1);
+            }
+        }
+
+        let placed_piece = mv.get_promotion().unwrap_or(moving_piece);
+        self.update_piece(accumulator, placed_piece, dest, moving_color, 1);
+
+        if moving_piece == Piece::King {
+            let rook_squares = match (source, dest) {
+                (chess::Square::E1, chess::Square::G1) => {
+                    Some((chess::Square::H1, chess::Square::F1))
+                }
+                (chess::Square::E1, chess::Square::C1) => {
+                    Some((chess::Square::A1, chess::Square::D1))
+                }
+                (chess::Square::E8, chess::Square::G8) => {
+                    Some((chess::Square::H8, chess::Square::F8))
+                }
+                (chess::Square::E8, chess::Square::C8) => {
+                    Some((chess::Square::A8, chess::Square::D8))
+                }
+                _ => None,
+            };
+            if let Some((rook_source, rook_dest)) = rook_squares {
+                let rook = board
+                    .piece_on(rook_source)
+                    .expect("castling rook is present");
+                let rook_color = board
+                    .color_on(rook_source)
+                    .expect("castling rook has a color");
+                self.update_piece(accumulator, rook, rook_source, rook_color, -1);
+                self.update_piece(accumulator, rook, rook_dest, rook_color, 1);
+            }
+        }
+
+        board.make_move_new(mv)
+    }
+
     pub fn accumulator(&self, board: &Board) -> NnueAccumulator {
         let mut accumulator = NnueAccumulator::new(&self.weights);
         for square in chess::ALL_SQUARES {
             if let Some((piece, color)) = board.piece_on(square).zip(board.color_on(square)) {
-                accumulator.update_piece(self, piece, square, color, 1);
+                self.update_piece(&mut accumulator, piece, square, color, 1);
             }
         }
         accumulator
@@ -243,7 +289,7 @@ mod tests {
 
             for mv in MoveGen::new_legal(&board) {
                 let mut incremental = accumulator.clone();
-                let next = incremental.apply_move(&nnue, &board, mv);
+                let next = nnue.apply_move(&mut incremental, &board, mv);
                 let full = nnue.accumulator(&next);
                 assert_eq!(incremental, full, "incremental update for {mv}");
                 assert_eq!(

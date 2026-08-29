@@ -22,8 +22,6 @@ web/.vite/
 train/data/
 train/checkpoints/
 engine/assets/*.nnue
-!engine/assets/fixtures/
-!engine/assets/fixtures/tinyccrl-test.nnue
 gauntlet*.jsonl
 *.pgn
 *.pgn.zst

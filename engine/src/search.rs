@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn search_returns_legal_move() {
-        let nnue = Nnue::new(NnueWeights::zero(256));
+        let nnue = Nnue::new(NnueWeights::zero(256, 32));
         let mut searcher = Searcher::new(&nnue);
         let board = Board::default();
         let mv = searcher.best_move(&board, 3).unwrap();

@@ -19,7 +19,7 @@ impl WasmEngine {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
         Self {
-            nnue: Nnue::new(default_weights()),
+            nnue: Nnue::new(default_weights(512, 64)),
         }
     }
 

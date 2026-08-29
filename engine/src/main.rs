@@ -11,6 +11,6 @@ fn main() {
                 None
             }
         })
-        .unwrap_or_else(tinyccrl_engine::default_weights);
+        .unwrap_or_else(|| tinyccrl_engine::default_weights(512, 64));
     Uci::new(weights).run();
 }

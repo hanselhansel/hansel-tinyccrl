@@ -1,0 +1,28 @@
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.pth
+*.pt
+*.binpack
+
+# Node/web
+node_modules/
+web/dist/
+web/.vite/
+*.log
+
+# Data
+train/data/
+train/checkpoints/
+engine/assets/*.nnue
+
+# OS
+.DS_Store

@@ -2,11 +2,29 @@ use crate::nnue::Nnue;
 use chess::{Board, BoardStatus, ChessMove, MoveGen, Piece};
 
 const MATE_SCORE: i32 = 100_000;
+const TT_SIZE: usize = 1 << 20; // ~1M entries
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TtFlag {
+    Exact,
+    Lower,
+    Upper,
+}
+
+#[derive(Clone, Copy)]
+struct TtEntry {
+    key: u64,
+    depth: u8,
+    flag: TtFlag,
+    score: i32,
+    best_move: Option<ChessMove>,
+}
 
 pub struct Searcher<'a> {
     nnue: &'a Nnue,
     nodes: u64,
     max_nodes: Option<u64>,
+    tt: Vec<Option<TtEntry>>,
 }
 
 impl<'a> Searcher<'a> {
@@ -15,6 +33,7 @@ impl<'a> Searcher<'a> {
             nnue,
             nodes: 0,
             max_nodes: None,
+            tt: vec![None; TT_SIZE],
         }
     }
 
@@ -25,6 +44,34 @@ impl<'a> Searcher<'a> {
 
     fn should_stop(&self) -> bool {
         self.max_nodes.map_or(false, |max| self.nodes >= max)
+    }
+
+    fn tt_index(&self, key: u64) -> usize {
+        key as usize % TT_SIZE
+    }
+
+    fn probe_tt(&self, board: &Board, depth: u8, alpha: i32, beta: i32) -> Option<i32> {
+        let entry = self.tt[self.tt_index(board.get_hash())]?;
+        if entry.key != board.get_hash() || entry.depth < depth {
+            return None;
+        }
+        match entry.flag {
+            TtFlag::Exact => Some(entry.score),
+            TtFlag::Lower if entry.score >= beta => Some(entry.score),
+            TtFlag::Upper if entry.score <= alpha => Some(entry.score),
+            _ => None,
+        }
+    }
+
+    fn store_tt(&mut self, board: &Board, depth: u8, flag: TtFlag, score: i32, best_move: Option<ChessMove>) {
+        let idx = self.tt_index(board.get_hash());
+        self.tt[idx] = Some(TtEntry {
+            key: board.get_hash(),
+            depth,
+            flag,
+            score,
+            best_move,
+        });
     }
 
     pub fn best_move(&mut self, board: &Board, max_depth: u8) -> Option<ChessMove> {
@@ -46,7 +93,7 @@ impl<'a> Searcher<'a> {
                     break;
                 }
                 let next = board.make_move_new(mv);
-                let score = -self.negamax(&next, depth - 1, -beta, -alpha);
+                let score = -self.negamax(&next, depth - 1, -beta, -alpha, true);
                 if score > alpha {
                     alpha = score;
                     current_best = mv;
@@ -57,14 +104,16 @@ impl<'a> Searcher<'a> {
         Some(best)
     }
 
-    fn negamax(&mut self, board: &Board, depth: u8, alpha: i32, beta: i32) -> i32 {
+    fn negamax(&mut self, board: &Board, depth: u8, alpha: i32, beta: i32, allow_null: bool) -> i32 {
         if self.should_stop() {
             return self.nnue.evaluate(board);
         }
         self.nodes += 1;
-        if depth == 0 {
-            return self.nnue.evaluate(board);
+
+        if let Some(score) = self.probe_tt(board, depth, alpha, beta) {
+            return score;
         }
+
         let mut legal: Vec<ChessMove> = MoveGen::new_legal(board).collect();
         if legal.is_empty() {
             return match board.status() {
@@ -73,11 +122,55 @@ impl<'a> Searcher<'a> {
                 _ => 0,
             };
         }
+
+        if depth == 0 {
+            return self.quiescence(board, alpha, beta);
+        }
+
         legal.sort_by_key(|mv| -move_score(board, *mv));
         let mut alpha = alpha;
+        let mut best_move = None;
+        let mut flag = TtFlag::Upper;
+
         for &mv in &legal {
             let next = board.make_move_new(mv);
-            let score = -self.negamax(&next, depth - 1, -beta, -alpha);
+            let score = -self.negamax(&next, depth - 1, -beta, -alpha, true);
+            if score >= beta {
+                self.store_tt(board, depth, TtFlag::Lower, beta, Some(mv));
+                return beta;
+            }
+            if score > alpha {
+                alpha = score;
+                best_move = Some(mv);
+                flag = TtFlag::Exact;
+            }
+        }
+        self.store_tt(board, depth, flag, alpha, best_move);
+        alpha
+    }
+
+    fn quiescence(&mut self, board: &Board, mut alpha: i32, beta: i32) -> i32 {
+        if self.should_stop() {
+            return self.nnue.evaluate(board);
+        }
+        self.nodes += 1;
+
+        let eval = self.nnue.evaluate(board);
+        if eval >= beta {
+            return beta;
+        }
+        if eval > alpha {
+            alpha = eval;
+        }
+
+        let mut captures: Vec<ChessMove> = MoveGen::new_legal(board)
+            .filter(|mv| board.piece_on(mv.get_dest()).is_some())
+            .collect();
+        captures.sort_by_key(|mv| -move_score(board, *mv));
+
+        for &mv in &captures {
+            let next = board.make_move_new(mv);
+            let score = -self.quiescence(&next, -beta, -alpha);
             if score >= beta {
                 return beta;
             }
@@ -104,7 +197,6 @@ fn move_score(board: &Board, mv: ChessMove) -> i32 {
     let mut score = 0;
     if let Some(captured) = board.piece_on(mv.get_dest()) {
         let moved = board.piece_on(mv.get_source()).unwrap_or(Piece::Pawn);
-        // MVV-LVA: value of captured minus value of attacker
         score = piece_value(captured) - piece_value(moved) + 10000;
     }
     if mv.get_promotion().is_some() {

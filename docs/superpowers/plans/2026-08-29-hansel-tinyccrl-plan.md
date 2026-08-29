@@ -1,6 +1,6 @@
 # Hansel TinyCCRL Implementation Plan
 
-`CURRENT_WORKING_FILE: /Users/hansel/conductor/repos/hansel-tinyccrl/README.md`
+`CURRENT_WORKING_FILE: /Users/hansel/conductor/repos/hansel-tinyccrl/train/src/tinyccrl/data.py`
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

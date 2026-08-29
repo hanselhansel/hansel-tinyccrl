@@ -93,15 +93,18 @@ impl Uci {
             if let Some(n) = nodes {
                 searcher = searcher.with_max_nodes(n);
             }
-            let mv = searcher
-                .best_move(&board, depth.unwrap_or(64))
-                .unwrap_or_else(|| {
-                    ChessMove::new(
-                        chess::Square::make_square(chess::Rank::Second, chess::File::E),
-                        chess::Square::make_square(chess::Rank::Fourth, chess::File::E),
-                        None,
-                    )
-                });
+            let (mv, _score) = searcher.best_move(&board, depth.unwrap_or(64)).unwrap_or_else(|| {
+                (
+                    ChessMove::from_str("e2e4").unwrap_or_else(|_| {
+                        ChessMove::new(
+                            chess::Square::make_square(chess::Rank::Second, chess::File::E),
+                            chess::Square::make_square(chess::Rank::Fourth, chess::File::E),
+                            None,
+                        )
+                    }),
+                    0,
+                )
+            });
             println!("bestmove {}", mv);
         } else {
             println!("bestmove e2e4");

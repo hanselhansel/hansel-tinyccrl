@@ -60,7 +60,10 @@ impl Uci {
             Board::default()
         } else if parts.get(1) == Some(&"fen") {
             let rest = &parts[2..];
-            let moves_idx = rest.iter().position(|&p| p == "moves").unwrap_or(rest.len());
+            let moves_idx = rest
+                .iter()
+                .position(|&p| p == "moves")
+                .unwrap_or(rest.len());
             let fen = rest[..moves_idx].join(" ");
             Board::from_str(&fen).ok().unwrap_or_else(Board::default)
         } else {
@@ -102,6 +105,7 @@ impl Uci {
                         None,
                     )
                 });
+            println!("info nodes {}", searcher.nodes());
             println!("bestmove {}", mv);
         } else {
             println!("bestmove e2e4");

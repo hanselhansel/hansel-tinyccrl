@@ -5,7 +5,7 @@ pub mod uci;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
-pub use nnue::{Nnue, NnueWeights};
+pub use nnue::{Nnue, NnueAccumulator, NnueWeights};
 pub use search::Searcher;
 pub use uci::Uci;
 

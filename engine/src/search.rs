@@ -17,6 +17,7 @@ struct TtEntry {
     depth: u8,
     flag: TtFlag,
     score: i32,
+    #[allow(dead_code)]
     best_move: Option<ChessMove>,
 }
 
@@ -42,8 +43,12 @@ impl<'a> Searcher<'a> {
         self
     }
 
+    pub fn nodes(&self) -> u64 {
+        self.nodes
+    }
+
     fn should_stop(&self) -> bool {
-        self.max_nodes.map_or(false, |max| self.nodes >= max)
+        self.max_nodes.is_some_and(|max| self.nodes >= max)
     }
 
     fn tt_index(&self, key: u64) -> usize {
@@ -63,7 +68,14 @@ impl<'a> Searcher<'a> {
         }
     }
 
-    fn store_tt(&mut self, board: &Board, depth: u8, flag: TtFlag, score: i32, best_move: Option<ChessMove>) {
+    fn store_tt(
+        &mut self,
+        board: &Board,
+        depth: u8,
+        flag: TtFlag,
+        score: i32,
+        best_move: Option<ChessMove>,
+    ) {
         let idx = self.tt_index(board.get_hash());
         self.tt[idx] = Some(TtEntry {
             key: board.get_hash(),
@@ -104,7 +116,15 @@ impl<'a> Searcher<'a> {
         Some(best)
     }
 
-    fn negamax(&mut self, board: &Board, depth: u8, alpha: i32, beta: i32, allow_null: bool) -> i32 {
+    #[allow(unused_variables)]
+    fn negamax(
+        &mut self,
+        board: &Board,
+        depth: u8,
+        alpha: i32,
+        beta: i32,
+        allow_null: bool,
+    ) -> i32 {
         if self.should_stop() {
             return self.nnue.evaluate(board);
         }

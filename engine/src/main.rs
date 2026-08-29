@@ -1,8 +1,5 @@
-mod nnue;
-mod search;
-mod uci;
-use nnue::NnueWeights;
-use uci::Uci;
+use tinyccrl_engine::uci::Uci;
+use tinyccrl_engine::NnueWeights;
 
 fn main() {
     let weights = std::env::var("NNUE_WEIGHTS")
@@ -14,6 +11,6 @@ fn main() {
                 None
             }
         })
-        .unwrap_or_else(|| NnueWeights::zero(256));
+        .unwrap_or_else(tinyccrl_engine::default_weights);
     Uci::new(weights).run();
 }

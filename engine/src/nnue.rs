@@ -89,8 +89,8 @@ impl Nnue {
 
     pub fn evaluate(&self, board: &Board) -> i32 {
         let hidden_size = self.weights.hidden_size;
-        let mut white_acc = self.weights.feature_biases.clone();
-        let mut black_acc = self.weights.feature_biases.clone();
+        let mut white_acc: Vec<i32> = self.weights.feature_biases.iter().map(|&b| b as i32).collect();
+        let mut black_acc: Vec<i32> = self.weights.feature_biases.iter().map(|&b| b as i32).collect();
 
         for sq in *board.combined() {
             let piece = board.piece_on(sq).expect("occupied square");
@@ -98,8 +98,8 @@ impl Nnue {
             let fw = Self::feature_index(piece, sq, color, Color::White);
             let fb = Self::feature_index(piece, sq, color, Color::Black);
             for i in 0..hidden_size {
-                white_acc[i] += self.weights.feature_weights[fw * hidden_size + i];
-                black_acc[i] += self.weights.feature_weights[fb * hidden_size + i];
+                white_acc[i] += self.weights.feature_weights[fw * hidden_size + i] as i32;
+                black_acc[i] += self.weights.feature_weights[fb * hidden_size + i] as i32;
             }
         }
 
@@ -111,7 +111,7 @@ impl Nnue {
 
         let mut sum = self.weights.hidden_bias as i32;
         for i in 0..hidden_size {
-            let v = i32::from(acc[i]).max(0);
+            let v = acc[i].max(0);
             sum += v * self.weights.hidden_weights[i] as i32;
         }
         sum

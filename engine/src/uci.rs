@@ -82,18 +82,26 @@ impl Uci {
         let depth = parts
             .windows(2)
             .find(|w| w[0] == "depth")
-            .and_then(|w| w[1].parse::<u8>().ok())
-            .unwrap_or(4);
+            .and_then(|w| w[1].parse::<u8>().ok());
+        let nodes = parts
+            .windows(2)
+            .find(|w| w[0] == "nodes")
+            .and_then(|w| w[1].parse::<u64>().ok());
 
         if let Some(board) = self.board {
             let mut searcher = Searcher::new(&self.nnue);
-            let mv = searcher.best_move(&board, depth).unwrap_or_else(|| {
-                ChessMove::new(
-                    chess::Square::make_square(chess::Rank::Second, chess::File::E),
-                    chess::Square::make_square(chess::Rank::Fourth, chess::File::E),
-                    None,
-                )
-            });
+            if let Some(n) = nodes {
+                searcher = searcher.with_max_nodes(n);
+            }
+            let mv = searcher
+                .best_move(&board, depth.unwrap_or(64))
+                .unwrap_or_else(|| {
+                    ChessMove::new(
+                        chess::Square::make_square(chess::Rank::Second, chess::File::E),
+                        chess::Square::make_square(chess::Rank::Fourth, chess::File::E),
+                        None,
+                    )
+                });
             println!("bestmove {}", mv);
         } else {
             println!("bestmove e2e4");

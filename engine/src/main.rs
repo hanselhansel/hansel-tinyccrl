@@ -1,3 +1,6 @@
+mod uci;
+use uci::Uci;
+
 fn main() {
-    println!("TinyCCRL engine ready");
+    Uci::new().run();
 }

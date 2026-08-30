@@ -2,12 +2,12 @@ use chess::{Board, Color};
 use std::fs;
 
 pub struct NnueWeights {
-    pub feature_weights: Vec<i16>, // [12 * 64 * ft_hidden]
-    pub feature_biases: Vec<i16>,    // [ft_hidden]
-    pub hidden1_weights: Vec<i16>,   // [ft_hidden * hidden1_size]
-    pub hidden1_biases: Vec<i16>,    // [hidden1_size]
-    pub hidden2_weights: Vec<i16>,  // [hidden1_size]
-    pub hidden2_bias: i16,
+    pub feature_weights: Vec<f32>, // [12 * 64 * ft_hidden]
+    pub feature_biases: Vec<f32>,  // [ft_hidden]
+    pub hidden1_weights: Vec<f32>, // [ft_hidden * hidden1_size]
+    pub hidden1_biases: Vec<f32>,  // [hidden1_size]
+    pub hidden2_weights: Vec<f32>, // [hidden1_size]
+    pub hidden2_bias: f32,
     pub ft_hidden: usize,
     pub hidden1_size: usize,
 }
@@ -15,12 +15,12 @@ pub struct NnueWeights {
 impl NnueWeights {
     pub fn zero(ft_hidden: usize, hidden1_size: usize) -> Self {
         Self {
-            feature_weights: vec![0; 12 * 64 * ft_hidden],
-            feature_biases: vec![0; ft_hidden],
-            hidden1_weights: vec![0; ft_hidden * hidden1_size],
-            hidden1_biases: vec![0; hidden1_size],
-            hidden2_weights: vec![0; hidden1_size],
-            hidden2_bias: 0,
+            feature_weights: vec![0.0; 12 * 64 * ft_hidden],
+            feature_biases: vec![0.0; ft_hidden],
+            hidden1_weights: vec![0.0; ft_hidden * hidden1_size],
+            hidden1_biases: vec![0.0; hidden1_size],
+            hidden2_weights: vec![0.0; hidden1_size],
+            hidden2_bias: 0.0,
             ft_hidden,
             hidden1_size,
         }
@@ -36,33 +36,35 @@ impl NnueWeights {
         let hidden1_size = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
         let mut offset = 8;
 
+        fn read_f32(bytes: &[u8], offset: &mut usize) -> f32 {
+            let b = &bytes[*offset..*offset + 4];
+            *offset += 4;
+            f32::from_le_bytes(b.try_into().expect("f32 bytes"))
+        }
+
         let ft_w_count = 12 * 64 * ft_hidden;
-        let mut feature_weights = vec![0i16; ft_w_count];
+        let mut feature_weights = vec![0.0f32; ft_w_count];
         for i in 0..ft_w_count {
-            feature_weights[i] = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
-            offset += 2;
+            feature_weights[i] = read_f32(bytes, &mut offset);
         }
-        let mut feature_biases = vec![0i16; ft_hidden];
+        let mut feature_biases = vec![0.0f32; ft_hidden];
         for i in 0..ft_hidden {
-            feature_biases[i] = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
-            offset += 2;
+            feature_biases[i] = read_f32(bytes, &mut offset);
         }
-        let mut hidden1_weights = vec![0i16; ft_hidden * hidden1_size];
+        let mut hidden1_weights = vec![0.0f32; ft_hidden * hidden1_size];
         for i in 0..ft_hidden * hidden1_size {
-            hidden1_weights[i] = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
-            offset += 2;
+            hidden1_weights[i] = read_f32(bytes, &mut offset);
         }
-        let mut hidden1_biases = vec![0i16; hidden1_size];
+        let mut hidden1_biases = vec![0.0f32; hidden1_size];
         for i in 0..hidden1_size {
-            hidden1_biases[i] = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
-            offset += 2;
+            hidden1_biases[i] = read_f32(bytes, &mut offset);
         }
-        let mut hidden2_weights = vec![0i16; hidden1_size];
+        let mut hidden2_weights = vec![0.0f32; hidden1_size];
         for i in 0..hidden1_size {
-            hidden2_weights[i] = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
-            offset += 2;
+            hidden2_weights[i] = read_f32(bytes, &mut offset);
         }
-        let hidden2_bias = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
+        let hidden2_bias = read_f32(bytes, &mut offset);
+
         Self {
             feature_weights,
             feature_biases,
@@ -111,8 +113,8 @@ impl Nnue {
     pub fn evaluate(&self, board: &Board) -> i32 {
         let ft_hidden = self.weights.ft_hidden;
         let hidden1_size = self.weights.hidden1_size;
-        let mut white_acc: Vec<i32> = self.weights.feature_biases.iter().map(|&b| b as i32).collect();
-        let mut black_acc: Vec<i32> = self.weights.feature_biases.iter().map(|&b| b as i32).collect();
+        let mut white_acc: Vec<f32> = self.weights.feature_biases.clone();
+        let mut black_acc: Vec<f32> = self.weights.feature_biases.clone();
 
         for sq in *board.combined() {
             let piece = board.piece_on(sq).expect("occupied square");
@@ -120,8 +122,8 @@ impl Nnue {
             let fw = Self::feature_index(piece, sq, color, Color::White);
             let fb = Self::feature_index(piece, sq, color, Color::Black);
             for i in 0..ft_hidden {
-                white_acc[i] += self.weights.feature_weights[fw * ft_hidden + i] as i32;
-                black_acc[i] += self.weights.feature_weights[fb * ft_hidden + i] as i32;
+                white_acc[i] += self.weights.feature_weights[fw * ft_hidden + i];
+                black_acc[i] += self.weights.feature_weights[fb * ft_hidden + i];
             }
         }
 
@@ -131,22 +133,24 @@ impl Nnue {
             &black_acc
         };
 
-        let mut hidden1 = vec![0i32; hidden1_size];
+        let mut hidden1 = vec![0.0f32; hidden1_size];
         for j in 0..hidden1_size {
-            let mut sum = self.weights.hidden1_biases[j] as i32;
+            let mut sum = self.weights.hidden1_biases[j];
             for i in 0..ft_hidden {
-                let v = acc[i].max(0);
-                sum += v * self.weights.hidden1_weights[i * hidden1_size + j] as i32;
+                let v = acc[i].max(0.0);
+                sum += v * self.weights.hidden1_weights[i * hidden1_size + j];
             }
             hidden1[j] = sum;
         }
 
-        let mut out = self.weights.hidden2_bias as i32;
+        let mut out = self.weights.hidden2_bias;
         for j in 0..hidden1_size {
-            let v = hidden1[j].max(0);
-            out += v * self.weights.hidden2_weights[j] as i32;
+            let v = hidden1[j].max(0.0);
+            out += v * self.weights.hidden2_weights[j];
         }
-        out
+
+        let out = out.clamp(-100.0, 100.0);
+        (out * 1000.0) as i32
     }
 }
 
